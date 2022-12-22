@@ -1,0 +1,670 @@
+---
+title: "PROYECTO_FINAL"
+author: "David Cárdenas Giler-Susana Carrillo-Jorge Merchán-Alexandra Wilches"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Instalación de paquetes y Carga de Librerías 
+```{r}
+
+#install.packages("easypackages")
+
+library("easypackages")      # instalamos y cargamos los paquetes
+paq <- c("car", "ggplot2", "ggcorrplot", "dplyr", "readxl", "FactoMineR", 
+         "corrplot", "GGally", "factoextra", "Hmisc", "PerformanceAnalytics", "dummy")
+packages(paq)
+
+set.seed(567)
+```
+
+## 2. Data
+Importamos y verificamos la data:
+
+```{r}
+
+data_nutricion <- read_excel("C:\\Users\\USER\\Downloads\\Caso. Data_Nutricion (1) - copia.xlsx")
+str(data_nutricion)
+```
+
+** Nota: 652 Observaciones y 23 variables cargadas. 
+
+Seleccionamos solo la data que vamos a utilizar en el PCA:
+
+```{r}
+dnutricion <- data_nutricion
+dnutricion <- dnutricion[,c(-1:-2)]  
+#dnutricion <- dnutricion[, -1]  
+str(dnutricion)
+```
+
+
+Conversión de variables cualitativas a factor y caracter a numércias
+```{r}
+dnutricion$sexo <- as.factor(dnutricion$sexo) 
+dnutricion$talla <- as.numeric(dnutricion$talla)
+dnutricion$clasif_anemia <- as.factor(dnutricion$clasif_anemia)
+dnutricion$clasif_diagnos_talla_edad <- as.factor(dnutricion$clasif_diagnos_talla_edad)
+dnutricion$clasif_diagnos_IMC <- as.factor(dnutricion$clasif_diagnos_IMC)
+dnutricion$clasif_perimetro_abdominal<- as.factor(dnutricion$clasif_perimetro_abdominal)
+
+dnutricion$cadera <- as.numeric(dnutricion$cadera)
+dnutricion$pliegue_cutaneo_BICEPS<- as.numeric(dnutricion$pliegue_cutaneo_BICEPS)
+dnutricion$pliegue_cutaneo_TRICEPS<- as.numeric(dnutricion$pliegue_cutaneo_TRICEPS)
+dnutricion$pliegue_cutaneo_ESCAPULAR<- as.numeric(dnutricion$pliegue_cutaneo_ESCAPULAR)
+dnutricion$pliegue_cutaneo_SUPRAILIACO<- as.numeric(dnutricion$pliegue_cutaneo_SUPRAILIACO)
+dnutricion$peso_kg <- as.numeric(dnutricion$peso_kg)
+str(dnutricion)
+
+```
+
+
+
+```{r}
+# Datos perdidos en el DataFrame
+which(is.na(dnutricion))  # filas que tienen datos perdidos
+```
+
+
+Determinamos el total de datos perdidos
+```{r}
+sum(is.na(dnutricion))
+```
+
+Número de datos perdidos por cada variable
+```{r}
+apply(is.na(dnutricion), 2, sum)
+```
+
+
+Vista porcentual de datos perdidos por variable
+```{r}
+apply(is.na(dnutricion), 2, mean) # % de datos perdidos por variable
+```
+
+
+
+
+
+
+Imputamos: Imputación Paramétrica
+
+
+
+```{r}
+dnutricion_imp <- impute(dnutricion, classes = list(
+                                     numeric  = imputeMode() , 
+                                    numeric  = imputeMedian(),
+                                    numeric  = imputeMedian()),
+              dummy.classes = c("integer","factor"), dummy.type = "numeric")
+#dnutricion_imp = dnutricion_imp$data[,1:min(dim(dnutricion))]
+
+```
+
+
+#                               Cargo dnutricion.Rds
+```{r}
+dnutricion <- readRDS("dnutricion.rds")    #levantamos
+dnutricion_imp <- dnutricion
+```
+
+
+Nos aseguramos que el nuevo dataframe no hay datos NaN
+
+```{r}
+sum(is.na(dnutricion_imp))    #total datos perdidos
+```
+
+```{r}
+sapply(dnutricion_imp, function(x) sum(is.na(x)))
+```
+```{r}
+
+dnutricion <- dnutricion_imp
+
+saveRDS(dnutricion, file="dnutricion.rds")  # guardamos
+
+#dnutricion <- readRDS("dnutricon.rds")    #levantamos
+
+str(dnutricion)
+```
+
+
+Convirtiendo variables cualitativas en Dummy
+```{r}
+#Variables_dummy <- dummy(df1[, 1]) # index
+variables_dummy <- dummy(dnutricion [, c(1, 17, 18, 19,20)]) # index
+
+```
+
+
+Convierto variables dummy a numéricas
+```{r}
+#df1$Variables_dummy<-dummy(df1 [, c(1, 17, 18, 19,20)])
+variables_dummy<- variables_dummy %>%
+  mutate_all(as.numeric)
+str(variables_dummy)
+
+```
+
+Trabajo solo con variables numéricas
+```{r}
+dx1<-dnutricion[, c(-1, -17, -18, -19, -20)]
+str(dx1)
+```
+
+Creamos un dataframe uniendo los dataframe creados
+El propósito es tener solo variables cuantitativas
+
+```{r}
+dfnum<- bind_cols(dx1, variables_dummy)
+str(dfnum)
+```
+
+
+## Análisis de Componentes Principales PCA
+
+
+Observando la media de las variables:
+
+```{r}
+apply(X = dfnum, MARGIN = 2, FUN = mean)
+
+```
+
+Observando la varianza de las variables:
+
+```{r}
+
+apply(X = dfnum, MARGIN = 2, FUN = var)
+
+```
+
+## 3. Análisis de correlación
+
+
+```{r}
+
+#chart.Correlation(dfnum, histogram = F, pch = 19)
+
+```
+
+## 4. Estandariza automática - PCA
+```{r}
+
+nutricion_PCA <- PCA(X = dfnum, scale.unit = TRUE, ncp = 64, graph = FALSE)
+
+nutricion_PCA$eig
+
+```
+
+Los primeros 12 componentes explican el 86.40% de la varianza:
+
+```{r}
+
+fviz_screeplot(nutricion_PCA, addlabels = TRUE, ylim = c(0, 50))
+
+```
+
+
+Al utilizar en el modelo las variables dummy se puede determinar que el aporte de cada variable 
+al modelo  con respecto de su varianza es muy denso, se procede a trabajar solo con las 
+variables numéricas del dataframe original sin las variables tipo dummy
+
+## 3. Análisis de correlación
+
+
+```{r}
+
+#chart.Correlation(dx1, histogram = F, pch = 19)
+
+```
+
+
+```{r}
+
+nutricion_PCA <- PCA(X = dx1, scale.unit = TRUE, ncp = 64, graph = FALSE)
+
+nutricion_PCA$eig
+
+```
+
+
+Los primeros 5 componentes explican el 86.79% de la varianza:
+
+```{r}
+
+fviz_screeplot(nutricion_PCA, addlabels = TRUE, ylim = c(0, 50))
+
+```
+
+
+Graficamos las observaciones sobre los dos primeros componentes principales.
+Dimensiones 1 y 2:
+
+```{r}
+library(factoextra)
+fviz_pca_ind(nutricion_PCA, geom.ind = "point", 
+             col.ind = "#FC4E07", 
+             axes = c(1, 2), 
+             pointsize = 1.5) 
+
+```
+
+Dimensiones 1 y 3:
+
+```{r}
+
+fviz_pca_ind(nutricion_PCA, geom.ind = "point", 
+             col.ind = "#FC4E07", 
+             axes = c(1, 3), 
+             pointsize = 1.5) 
+
+```
+
+Dimensiones 1 y 4:
+
+```{r}
+
+fviz_pca_ind(nutricion_PCA, geom.ind = "point", 
+             col.ind = "#FC4E07", 
+             axes = c(1, 4), 
+             pointsize = 1.5) 
+
+```
+
+
+Vamos a identificar las variables con mayor contribución a nuestros componentes seleccionados
+
+Dim1:
+```{r}
+fviz_contrib(nutricion_PCA, choice = "var", axes = 1, top = 15)
+
+```
+Nota Explicativa: La línea roja nos indica la contribución media; toda contribución mayor a este puede 
+considerarse importante para el componente.
+
+
+Dim2:
+```{r}
+fviz_contrib(nutricion_PCA, choice = "var", axes = 2, top = 15)
+
+```
+
+
+Dim3:
+```{r}
+fviz_contrib(nutricion_PCA, choice = "var", axes = 3, top = 15)
+
+```
+
+Dim4:
+```{r}
+fviz_contrib(nutricion_PCA, choice = "var", axes = 4, top = 15)
+
+```
+
+Observamos la función de los componentes
+Los nombres se asignarán con base en la composición de Componentes - variables
+
+```{r}
+nutricion_PCA
+
+```
+
+Con base en la composición de cada Componente se le asignara el nombre.
+```{r}
+nutricion_PCA$var$contrib
+
+```
+
+
+Guardamos los nuevos componentes. Solo los top 4 seleccionados.
+```{r}
+
+componentes <- nutricion_PCA$ind$coord [, 1:4]
+
+dim(componentes)
+
+save(componentes, file = "pacientes.Rdata")
+View(componentes)
+head(componentes)
+```
+
+```{r}
+
+
+saveRDS(nutricion_PCA, file="nutricion_PCA.rds")  # guardamos
+
+saveRDS(dx1, file="dx1.rds")  # guardamos
+#dnutricion <- readRDS("dnutricon.rds")    #levantamos
+
+#str(dnutricion)
+```
+
+Fin!!
+
+## B. ANÁLISIS DE CLUSTER
+
+```{r}
+library("easypackages") # instalamos y cargamos los paquetes
+paq <- c("tidyverse", "ggplot2", "ggcorrplot", "dplyr", "readxl",  "FactoMineR", 
+         "corrplot", "GGally", "factoextra", "Hmisc", "PerformanceAnalytics", "car", "cluster",
+         "NbClust", "tidyr", "readr")
+packages(paq)
+
+set.seed(567)
+```
+
+## 1. Observamos la data
+
+se toma el archivo dX1.RDS ya trabajado 
+```{r}
+dnutricion <- readRDS("dx1.rds")    #levantamos
+head(dnutricion, 6)
+View(dnutricion)
+```
+
+
+```{r}
+str(dnutricion) #data seleccionada para el an?lisis clUster
+```
+
+##2. Viendo que las variables estan en diferentes escalas, vamos a normalizar las puntuaciones:
+
+```{r}
+
+dnutricion <- scale(dnutricion)
+View(dnutricion)
+str(dnutricion)
+```
+
+## 3. Calcular las distancias con el método euclidean
+
+
+```{r}
+Distancias <- get_dist(dnutricion, method = "euclidean") 
+
+fviz_dist(Distancias, gradient = list(low = "blue", mid = "white", high = "red"))
+
+```
+
+Nota Explicativa: 
+Como son bastantes casos, el gráfico no se aprecia mucho
+
+## 4.Determinar el número de clústers.
+
+Vamos a estimar el número de clusters idóneo: Elbow
+```{r}
+
+fviz_nbclust(dnutricion, kmeans, method = "wss")
+
+```
+
+Vamos a estimar el número de clusters idoneo: Método silhouette
+```{r}
+fviz_nbclust(dnutricion, kmeans, method = "silhouette")
+
+```
+
+Vamos a estimar el número de clusters idoneo: Método gap_stat
+
+
+
+
+```{r}
+
+fviz_nbclust(dnutricion, kmeans, method = "gap_stat")
+
+```
+
+
+## 5. Realizaremos una clasificación Jerárquica para visualizar posible número de clústers
+
+```{r}
+
+CJerarquico <- hcut(dnutricion, k = 5, stand = TRUE) #k = 2 a m?s
+fviz_dend(CJerarquico, rect = TRUE, cex = 0.5,
+          k_colors = c("red","#2E9FDF","green","black", "blue"))
+
+```
+
+## 6. Calculamos los k=5 clusters; podemos probar igual con 3 y 4 clusters.
+
+```{r}
+
+kmeans5 <- kmeans(dnutricion, centers = 5, nstart = 25)
+kmeans5
+head(dnutricion)
+
+```
+
+estructura k-means
+```{r}
+
+str(kmeans5)
+
+```
+
+Centroides de los clusters:
+
+```{r}
+kmeans5$centers
+```
+
+Tamaño de los clusters:
+```{r}
+
+kmeans5$size
+
+```
+
+
+
+## Graficar los clusters
+
+Gráfico de los cluster's
+```{r}
+
+fviz_cluster(list(data = dnutricion, cluster = kmeans5$cluster))
+
+
+```
+
+2do tipo de gráfico
+```{r}
+
+fviz_cluster(list(data = dnutricion, cluster = kmeans5$cluster), ellipse.type = "euclid",repel = TRUE,star.plot = TRUE)
+
+```
+
+3er tipo de grafico
+```{r}
+fviz_cluster(list(data = dnutricion, cluster = kmeans5$cluster),ellipse.type = "norm")
+
+
+```
+
+
+4to tipo de grafico
+```{r}
+
+fviz_cluster(list(data = dnutricion, cluster = kmeans5$cluster), ellipse.type = "norm",palette = "Set2", ggtheme = theme_minimal())
+
+
+```
+
+# Guardamos el clúster en la base de datos originales:
+
+```{r}
+cluster <- data.frame(kmeans5$cluster)
+str(cluster)
+```
+
+
+
+```{r}
+str(dnutricion)
+```
+
+
+
+```{r}
+data_nutricion_c <- dnutricion
+data_nutricion_c$cluster <- as.factor(cluster$kmeans5.cluster)
+head(data_nutricion_c)
+```
+
+
+```{r}
+saveRDS(data_nutricion_c, file="data_nutricion_c.rds")  # guardamos
+
+```
+
+
+Fin!!
+
+
+# -------------   Regresión Logística   ------------- 
+
+variable dependiente: Target
+0: No tiene diabetes
+1: Si tiene diabetes
+
+Variable Independiente: IMC
+
+
+1. Cargamos los datos para el modelo 
+```{r}
+dnutricion <- readRDS("dx1.rds")  
+str(dnutricion)
+head(dnutricion)
+```
+
+Observamos a las variables independientes con la variable dependiente.
+```{r}
+t1 <- table(dx1$IMC, dx1$target)
+print(summary(t1))
+print("--------------------------------------------")
+print("Variable Independiente * Variable dependiente:")
+print(prop.table(t1, 1)*100)
+ 
+# Estas variables están relacionadas de manera significativa
+```
+
+
+2. Crear un objeto llamado modelog que tendrá los cálculos del modelo lógistico 
+
+```{r}
+#modelog <- glm(dnutricion$target~ dnutricion$IMC, data = dnutricion, family="binomial")
+modelog <- glm(dnutricion$target~ dnutricion$IMC, data = dnutricion, family="binomial")
+```
+
+Revisando la composición del modelo 
+```{r}
+names(modelog)
+```
+
+3. Definir fórmula del modelo de regresión logística 
+  log(p/1-p)= b0 = b1(x1)
+
+Revisamos si la variable independinte es suficientemente explicativa para poder
+predecir a nuestra variable dependiente
+
+Para esto se revisa los valores entregados del modelo 
+
+```{r}
+summary(modelog)
+```
+
+Coefficients:
+                Estimate Std. Error z value Pr(>|z|)    
+(Intercept)    -11.26529    1.04341 -10.797   <2e-16 ***
+dnutricion$IMC   0.42016    0.04347   9.665   <2e-16 ***
+
+
+Prueba de Hipótesis 
+H0: variable x no aporta para predecir y
+Ha: variable x si aporta para predecir y
+
+dado que el pvalor es menor que 0.05 Podemos concluir que nuestra variable independiente 
+tiene la capacidad de predecir a la variable dependiente
+
+
+4. Revisamos los valores de los coeficientes Odd Ratio 
+```{r}
+exp(modelog$coefficients)
+```
+(Intercept) dnutricion$IMC 
+  1.280992e-05   1.522213e+00 
+
+Interpretación: 
+Odds Ratio de la variable independiente es 1.52
+por cada unidad que aumenta la variable IMC, el odds que se presente el evento de diabetes 
+aumenta 1.5 veces, es decir aumenta un 50% 
+
+
+Otra forma para determinar la capacidad predictora de las variable independiente
+```{r}
+# con pROC
+# La variable independiente ingresa como numérico
+
+library(pROC)
+ROC1 <- roc(dx1$IMC~as.numeric(dx1$target))
+
+print("Nivel predictibilidad de esta variable independiente sobre la variable dependiente es: ")
+print(ROC1)
+print("Intervalo de confianza de la curva ROC")
+print(ci.auc(ROC1))
+plot(ROC1)
+
+```
+
+
+
+5. observar las probabilidades que el modelo clasifique o no el evento 
+Analizamos la variable fitted.values (valores ajustados)
+```{r}
+modelog$fitted.values
+```
+
+6. Se define el punto de corte 
+Para esto creamos una nueva variable que agregamos a la data original 
+
+```{r}
+#dx1$predicho<- as.numeric(modelog$fitted.values>=0.5)
+
+dx2<-dx1
+dx2$target<-as.factor(dx2$target)
+levels(dx2$target) = c('NO', 'SI')
+
+valores_predichos<- as.numeric(modelog$fitted.values>=0.5)
+valores_predichos<- factor(valores_predichos, labels = levels(dx2$target))
+
+```
+
+7. Evaluamos el modelo para determinar si está clasificando bien los  valores predichos 
+
+Usaremos una matriz de confusión o de contigencia
+
+La librería caret nos proporciona también la precisión, la sensibilidad y la especificidad
+del modelo de regresión logística
+
+
+```{r}
+library(caret)
+caret::confusionMatrix(valores_predichos, dx2$target, positive='SI')
+```
+
+
+
+ Interpretación:
+ El modelo tiene un 85% de precisión al predecir diabetes
+ Tiene una sensibilidad  : de 32% (Casos predichos positivos que son positivos)
+ Tiene una Especificidad : de 97% (Casos predichos negativos que son negativos)
+ 
+ 
